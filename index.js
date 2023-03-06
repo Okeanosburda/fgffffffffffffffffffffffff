@@ -1,66 +1,58 @@
-import 'dotenv/config' // Load environment variables.
-import { createServer } from 'http'
-import {  Client, GatewayIntentBits, Partials } from 'discord.js'
-import Akinator from './Akinator.js'
+const { PermissionsBitField, EmbedBuilder, ButtonStyle, ChannelType, ActionRowBuilder, SelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, InteractionType, SelectMenuInteraction, ButtonBuilder, AuditLogEvent } = require("discord.js");
+const { Client, GatewayIntentBits, Partials } = require("discord.js");
 const INTENTS = Object.values(GatewayIntentBits);
 const PARTIALS = Object.values(Partials);
+const Discord = require("discord.js")
+const louritydb = require("croxydb")
 const client = new Client({
     intents: INTENTS,
     allowedMentions: {
-        parse: ["users"]
+        parse: ["users", "roles", "everyone"]
     },
     partials: PARTIALS,
     retryLimit: 3
 });
+// lourity - discord.gg/altyapilar
+global.client = client;
+client.commands = (global.commands = []);
 
-client.login(process.env.token)
+const { readdirSync } = require("fs")
+const { TOKEN } = require("./config.json");
+readdirSync('./commands').forEach(f => {
+    if (!f.endsWith(".js")) return;
+
+    const props = require(`./commands/${f}`);
+
+    client.commands.push({
+        name: props.name.toLowerCase(),
+        description: props.description,
+        options: props.options,
+        dm_permission: props.dm_permission,
+        type: 1
+    });
+
+    console.log(`[COMMAND] ${props.name} komutu yüklendi.`)
+
+});
+readdirSync('./events').forEach(e => {
+
+    const eve = require(`./events/${e}`);
+    const name = e.split(".")[0];
+
+    client.on(name, (...args) => {
+        eve(client, ...args)
+    });
+    console.log(`[EVENT] ${name} eventi yüklendi.`)
+});
 
 
-client.on('ready', async () => {
-    console.log(client.user.tag+' İsmi ile giriş yaptım.')
+client.login(TOKEN)
 
-    // Set bot activity.
-    client.user.setActivity("/akinator")
-
-    const commands = [{
-        name: 'akinator',
-        description: 'Akinator Oyunu! 🧞',
-
-    }]
-
-    // Deploy Global /slash commands
-    await client.application.commands.set(commands)
+// Bir Hata Oluştu
+process.on("unhandledRejection", (reason, p) => {
+    console.log(reason, p);
 })
-
-client.on('interactionCreate', async (ctx) => {
-    if (!ctx.isCommand()) return
-    if (ctx.commandName !== 'akinator') return
-
-    await ctx.deferReply()
-
-    const language = "tr"
-    const game = new Akinator(language)
-
-    await game.start()
-    await ctx.editReply({
-        components: [game.component],
-        embeds: [game.embed]
-    })
-    const filter = intercation => intercation.user.id === ctx.user.id
-    const channel = await client.channels.fetch(ctx.channelId)
-
-    while (!game.ended) try {
-        await game.ask(channel, filter)
-        if (!game.ended) await ctx.editReply({ embeds: [game.embed], components: [game.component] })
-    } catch (err) {
-        if (err instanceof Error) console.error(err)
-        return await ctx.editReply({
-            components: [],
-            embeds: [],
-            content: 'Bu komut zaman aşımına uğradı.'
-        })
-    }
-
-    await game.stop()
-    await ctx.editReply({ components: [], embeds: [game.embed] })
+// Hata oluştuğunda botun kapanmamasını sağlar | discord.gg/altyapilar
+process.on("unhandledRejection", async (error) => {
+    return console.log("Bir hata oluştu! " + error)
 })
